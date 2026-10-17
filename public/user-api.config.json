@@ -1,0 +1,8 @@
+{
+  "apiUrl": "http://192.168.1.127:45455/",
+  "configRefreshIntervalMs": 30000,
+  "auth": {
+    "headerName": "Token",
+    "scheme": ""
+  }
+}

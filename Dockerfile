@@ -1,0 +1,28 @@
+FROM node:20-alpine AS build
+
+WORKDIR /app
+
+COPY package*.json ./
+RUN npm ci
+
+COPY . .
+
+ARG REACT_APP_API_BASE_URL=/api
+ENV REACT_APP_API_BASE_URL=$REACT_APP_API_BASE_URL
+
+ARG REACT_APP_ACTIVECODE_BASE_URL_PRIMARY=
+ENV REACT_APP_ACTIVECODE_BASE_URL_PRIMARY=$REACT_APP_ACTIVECODE_BASE_URL_PRIMARY
+
+ARG REACT_APP_ACTIVECODE_BASE_URL_SECONDARY=
+ENV REACT_APP_ACTIVECODE_BASE_URL_SECONDARY=$REACT_APP_ACTIVECODE_BASE_URL_SECONDARY
+
+RUN npm run build
+
+FROM nginx:1.27-alpine
+
+COPY nginx.conf /etc/nginx/conf.d/default.conf
+COPY --from=build /app/build /usr/share/nginx/html
+
+EXPOSE 80
+
+CMD ["nginx", "-g", "daemon off;"]

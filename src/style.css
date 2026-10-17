@@ -1,0 +1,42 @@
+/* src/style.css */
+body {
+  margin: 0;
+  font-family: sans-serif;
+  background: #f4f6f9;
+}
+
+input, textarea {
+  padding: 8px;
+  margin: 5px;
+  width: 100%;
+}
+
+button {
+  padding: 8px 12px;
+  margin: 5px;
+  cursor: pointer;
+}
+
+table {
+  width: 100%;
+  background: white;
+  border-collapse: collapse;
+}
+
+td, th {
+  padding: 10px;
+  border-bottom: 1px solid #ddd;
+}
+
+.sidebar {
+  width: 220px;
+  background: #1e1e2f;
+  color: white;
+  height: 100vh;
+  padding: 20px;
+}
+
+.main {
+  flex: 1;
+  padding: 20px;
+}

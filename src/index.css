@@ -1,0 +1,139 @@
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+@font-face {
+  font-family: 'IranSans';
+ src: url("../public/B_Yekan/IRANSansWeb.woff") format('woff');
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+}
+:root {
+  --bg-soft: #f4f7f9;
+  --bg-paper: #ffffff;
+  --ink: #0f172a;
+  --muted: #64748b;
+  --line: #dbe4ea;
+  --primary: #0f766e;
+  --primary-strong: #115e59;
+  --primary-soft: #ccfbf1;
+  --accent: #d97706;
+  --danger: #dc2626;
+  --success: #15803d;
+}
+
+@layer base {
+  * {
+    @apply box-border;
+  }
+
+  html,
+  body,
+  #root {
+    min-height: 100%;
+  }
+
+  body {
+    margin: 0;
+    font-family: 'IranSans', sans-serif;
+    color: var(--ink);
+    background:
+      radial-gradient(circle at 14% 12%, rgba(20, 184, 166, 0.08) 0, rgba(20, 184, 166, 0) 40%),
+      radial-gradient(circle at 84% 8%, rgba(245, 158, 11, 0.1) 0, rgba(245, 158, 11, 0) 36%),
+      linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%);
+  }
+
+  h1,
+  h2,
+  h3,
+  h4 {
+    margin: 0;
+  }
+}
+
+@layer components {
+  .app-page {
+    @apply min-h-full p-4 md:p-6 lg:p-8;
+  }
+
+  .app-shell {
+    @apply max-w-7xl mx-auto space-y-6;
+  }
+
+  .panel-card {
+    @apply bg-white/95 backdrop-blur-sm border border-slate-200 rounded-2xl shadow-sm;
+  }
+
+  .panel-card-soft {
+    @apply bg-gradient-to-br from-white to-teal-50/40 border border-teal-100 rounded-2xl shadow-sm;
+  }
+
+  .panel-title {
+    @apply text-2xl md:text-3xl font-extrabold text-slate-900 tracking-tight;
+  }
+
+  .panel-subtitle {
+    @apply text-sm md:text-base text-slate-500 mt-1;
+  }
+
+  .panel-label {
+    @apply block mb-1.5 text-sm font-semibold text-slate-700;
+  }
+
+  .panel-input {
+    @apply w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-800 placeholder:text-slate-400 outline-none transition focus:border-teal-600 focus:ring-2 focus:ring-teal-100;
+  }
+
+  .panel-select {
+    @apply panel-input;
+  }
+
+  .panel-textarea {
+    @apply panel-input min-h-[90px] resize-y;
+  }
+
+  .panel-btn-primary {
+    @apply inline-flex items-center justify-center gap-2 rounded-xl bg-teal-700 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-teal-800 disabled:cursor-not-allowed disabled:opacity-50;
+  }
+
+  .panel-btn-secondary {
+    @apply disabled:cursor-not-allowed disabled:opacity-50 inline-flex items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50;
+  }
+
+  .panel-btn-danger {
+    @apply inline-flex items-center justify-center gap-2 rounded-xl border border-red-200 bg-red-50 px-4 py-2.5 text-sm font-semibold text-red-700 transition hover:bg-red-100;
+  }
+
+  .panel-alert-success {
+    @apply rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700;
+  }
+
+  .panel-alert-error {
+    @apply rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700;
+  }
+
+  .panel-table-wrap {
+    @apply overflow-auto;
+  }
+
+  .panel-table {
+    @apply w-full text-right text-sm;
+  }
+
+  .panel-table thead {
+    @apply sticky top-0 z-10 bg-slate-100/95 text-slate-600;
+  }
+
+  .panel-table th {
+    @apply px-4 py-3 font-semibold whitespace-nowrap;
+  }
+
+  .panel-table td {
+    @apply px-4 py-3 align-middle;
+  }
+
+  .panel-table tbody tr {
+    @apply border-b border-slate-100 hover:bg-slate-50/80 transition-colors;
+  }
+}
