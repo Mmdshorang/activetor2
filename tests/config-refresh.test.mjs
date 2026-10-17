@@ -35,7 +35,7 @@ test('All API clients use the refreshed address on their next call', async () =>
   await users.getUsers(); await customers.getCustomers(); await contracts.getContracts();
   address = '/new'; await load.refresh();
   await users.getUsers(); await customers.getCustomers(); await contracts.getContracts();
-  assert.deepEqual(urls, ['/old/GetUser', '/old/GetCoustomer', '/old/GetContract', '/new/GetUser', '/new/GetCoustomer', '/new/GetContract']);
+  assert.deepEqual(urls, ['/old/GetUser', '/old/GetCoustomer', '/old/GetAllContract', '/new/GetUser', '/new/GetCoustomer', '/new/GetAllContract']);
 });
 
 test('Failed refresh preserves last valid config and next refresh can recover', async () => {

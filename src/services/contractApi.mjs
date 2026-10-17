@@ -12,6 +12,19 @@ import {
   nullableList,
 } from './modelValues.mjs';
 
+// Contract RowID is owned by the backend. Keep its exact integer text, but do
+// not reject zero, negative values or values outside JavaScript/.NET ranges.
+function contractRowIDValue(value) {
+  const text = String(value ?? '').trim();
+  if (
+    (typeof value === 'number' && !Number.isSafeInteger(value)) ||
+    !/^-?\d+$/.test(text)
+  ) {
+    throw new ApiError('شناسه قرارداد باید عدد صحیح معتبر باشد.');
+  }
+  return text;
+}
+
 export function buildContractPayload(model = {}, { update = false } = {}) {
   const active =
     model.IsActive === '' || model.IsActive == null
@@ -24,7 +37,7 @@ export function buildContractPayload(model = {}, { update = false } = {}) {
 
   return {
     RowID: update
-      ? longValue(model.RowID, 'شناسه قرارداد', { positive: true })
+      ? contractRowIDValue(model.RowID)
       : '0',
     Mdate: dateValue(model.Mdate, 'شروع قرارداد'),
     Fdate: String(model.Fdate ?? ''),
@@ -57,7 +70,12 @@ export function normalizeContract(model) {
 
   values.RowID ??= model.rowId;
 
-  return buildContractPayload(values, { update: true });
+  return {
+    ...buildContractPayload(values, { update: true }),
+    Name: String(field(model, 'Name') ?? ''),
+    ShopName: String(field(model, 'ShopName') ?? ''),
+    MobileNumber: String(field(model, 'MobileNumber') ?? ''),
+  };
 }
 
 export function createContractApi(options) {
@@ -77,32 +95,17 @@ export function createContractApi(options) {
   return {
     async getContracts(requestOptions) {
       return listFrom(
-        await request('GetContract', undefined, requestOptions)
+        await request('GetAllContract', undefined, requestOptions)
       );
     },
 
-    async getContractByID(rowID, requestOptions) {
-      const id = longValue(rowID, 'شناسه قرارداد', {
+    async getContractsByCustomer(rowID, requestOptions) {
+      const id = longValue(rowID, 'شناسه مشتری', {
         positive: true,
       });
-
-      const contracts = listFrom(
-        await request(
-          'GetContractByID',
-          { RowID: id },
-          requestOptions
-        )
+      return listFrom(
+        await request('GetContract', { RowID: id }, requestOptions)
       );
-
-      const contract = contracts.find(
-        item => item.RowID === id
-      );
-
-      if (!contract) {
-        throw new ApiError('قرارداد موردنظر پیدا نشد.');
-      }
-
-      return contract;
     },
 
     async insertContract(model) {

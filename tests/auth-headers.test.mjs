@@ -173,7 +173,7 @@ test('All thirteen fetch operations enforce Token even when getConfig supplies l
   await users.getUsers(); await users.getUserByID('1'); await users.insertUser(user); await users.updateUser(user);
   await customers.getCustomers(); await customers.getCustomerByID('1'); await customers.insertCustomer({}); await customers.updateCustomer({ RowID: '1' });
   const contracts = createContractApi(options);
-  await contracts.getContracts(); await contracts.getContractByID('1'); await contracts.insertContract({}); await contracts.updateContract({ RowID: '1' });
+  await contracts.getContracts(); await contracts.getContractsByCustomer('1'); await contracts.insertContract({}); await contracts.updateContract({ RowID: '1' });
   assert.equal(calls.length, 13);
 });
 

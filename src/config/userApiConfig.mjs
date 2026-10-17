@@ -1,6 +1,6 @@
 import { TOKEN_AUTH } from '../services/authHeaders.mjs';
 
-export const API_OPERATIONS = ['Login', 'GetUser', 'InsertUser', 'Updateuser', 'GetUserByID', 'GetCoustomer', 'GetCoustomerByID', 'InsertCoustomer', 'UpdateCoustomer', 'GetContract', 'GetContractByID', 'InsertContract', 'UpdateContract'];
+export const API_OPERATIONS = ['Login', 'GetUser', 'InsertUser', 'Updateuser', 'GetUserByID', 'GetCoustomer', 'GetCoustomerByID', 'InsertCoustomer', 'UpdateCoustomer', 'GetAllContract', 'GetContract', 'InsertContract', 'UpdateContract'];
 
 // Transport defaults, not a claim about an unverified server contract.
 // Deployments normally set only apiUrl; baseUrl remains a supported alias.
@@ -24,8 +24,8 @@ const DEFAULT_CONFIG = {
     GetCoustomerByID: { path: 'GetCoustomerByID', method: 'POST' },
     InsertCoustomer: { path: 'InsertCoustomer', method: 'POST' },
     UpdateCoustomer: { path: 'UpdateCoustomer', method: 'POST' },
-    GetContract: { path: 'GetContract', method: 'GET' },
-    GetContractByID: { path: 'GetContractByID', method: 'POST' },
+    GetAllContract: { path: 'GetAllContract', method: 'GET' },
+    GetContract: { path: 'GetContract', method: 'POST' },
     InsertContract: { path: 'InsertContract', method: 'POST' },
     UpdateContract: { path: 'UpdateContract', method: 'POST' },
   },
@@ -72,7 +72,7 @@ export function validateConfig(input) {
       (Array.isArray(config.successStatusCodes) && config.sessionExpiredStatusCodes.some(code => config.successStatusCodes.includes(code)))) invalid.push('sessionExpiredStatusCodes');
   for (const name of API_OPERATIONS) {
     const ep = config.endpoints[name];
-    const allowed = ['GetUser', 'GetUserByID', 'GetCoustomer', 'GetCoustomerByID', 'GetContract', 'GetContractByID'].includes(name) ? ['GET', 'POST'] : ['Updateuser', 'UpdateCoustomer', 'UpdateContract'].includes(name) ? ['POST', 'PUT', 'PATCH'] : ['POST'];
+    const allowed = ['GetUser', 'GetUserByID', 'GetCoustomer', 'GetCoustomerByID', 'GetAllContract', 'GetContract'].includes(name) ? ['GET', 'POST'] : ['Updateuser', 'UpdateCoustomer', 'UpdateContract'].includes(name) ? ['POST', 'PUT', 'PATCH'] : ['POST'];
     if (typeof ep.path !== 'string' || !ep.path.trim() || /[:?#\\]|(^|\/)\.\.(\/|$)/.test(ep.path)) invalid.push(`${name}.path`);
     if (!allowed.includes(ep.method)) invalid.push(`${name}.method`);
   }

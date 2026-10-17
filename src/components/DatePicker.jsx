@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
+import { createPortal } from "react-dom";
 import moment from "jalali-moment";
 import { Calendar, X, ChevronLeft, ChevronRight } from "lucide-react";
 
@@ -96,7 +97,7 @@ export default function JalaliDatePicker({
   
   // تعیین موقعیت پاپ‌آپ (بالا یا پایین)
   const [placement, setPlacement] = useState("bottom");
-  const [popupStyle, setPopupStyle] = useState({});
+  const [popupStyle, setPopupStyle] = useState({ visibility: "hidden" });
 
   // همگام‌سازی اینپوت با مقدار value خارجی
   useEffect(() => {
@@ -111,7 +112,10 @@ export default function JalaliDatePicker({
   // بستن پاپ‌آپ با کلیک بیرون
   useEffect(() => {
     function handleClickOutside(e) {
-      if (!rootRef.current?.contains(e.target)) {
+      if (
+        !rootRef.current?.contains(e.target) &&
+        !popupRef.current?.contains(e.target)
+      ) {
         setOpen(false);
       }
     }
@@ -136,12 +140,23 @@ export default function JalaliDatePicker({
     }
     setPlacement(chosen);
 
-    const offset = (root.offsetHeight ?? rect.height) + 8;
-    if (chosen === "bottom") {
-      setPopupStyle({ top: offset, bottom: undefined, right: 0 });
-    } else {
-      setPopupStyle({ bottom: offset, top: undefined, right: 0 });
-    }
+    const margin = 8;
+    const popupWidth = Math.min(320, window.innerWidth - margin * 2);
+    const left = Math.min(
+      Math.max(margin, rect.right - popupWidth),
+      window.innerWidth - popupWidth - margin
+    );
+    const top = chosen === "bottom"
+      ? rect.bottom + margin
+      : Math.max(margin, rect.top - popupHeight - margin);
+
+    setPopupStyle({
+      position: "fixed",
+      top,
+      left,
+      width: popupWidth,
+      visibility: "visible",
+    });
   };
 
   useEffect(() => {
@@ -201,6 +216,12 @@ export default function JalaliDatePicker({
     setOpen(false);
   };
 
+  const showCalendar = () => {
+    if (disabled) return;
+    setPopupStyle({ visibility: "hidden" });
+    setOpen(true);
+  };
+
   const grid = generateMonthGrid(calendarMonth.jYear(), calendarMonth.jMonth());
 
   return (
@@ -218,26 +239,29 @@ export default function JalaliDatePicker({
             onKeyDown={event => {
               if (event.key === 'Enter') { event.preventDefault(); commitInput(input); setOpen(false); }
             }}
-            onFocus={() => setOpen(true)}
+            onFocus={showCalendar}
             placeholder={placeholder}
             className={`w-full border rounded-lg px-3 py-2 pr-9 text-right placeholder-gray-400 shadow-sm 
               focus:outline-none focus:ring-2 focus:ring-indigo-400 disabled:bg-gray-100 ${inputClassName}`}
           />
-          <div
-            className="absolute left-2 top-2.5 w-5 h-5 text-gray-500 cursor-pointer hover:text-indigo-600 transition"
+          <button
+            type="button"
+            className="absolute left-2 top-2.5 w-5 h-5 p-0 text-gray-500 hover:text-indigo-600 transition"
+            onMouseDown={event => event.preventDefault()}
             onClick={() => {
               if (disabled) return;
-              if (!open) {
+              if (open) {
+                setOpen(false);
+              } else {
                 const p = parseJalali(input, format);
                 if (p) setCalendarMonth(p);
+                showCalendar();
               }
-              setOpen((o) => !o);
-              if (inputRef.current) inputRef.current.focus();
             }}
-            aria-hidden="true"
+            aria-label="باز کردن تقویم"
           >
             <Calendar className="w-5 h-5" />
-          </div>
+          </button>
         </div>
         {input && (
           <button
@@ -256,16 +280,15 @@ export default function JalaliDatePicker({
       </div>
 
       {/* Calendar Popup */}
-      {open && !disabled && (
+      {open && !disabled && createPortal(
         <div
           ref={popupRef}
-          className={`absolute z-50 w-80 bg-blue-100 rounded-xl shadow-lg ring-1 ring-black ring-opacity-5 p-2 transition-transform duration-150`}
+          role="dialog"
+          aria-label="انتخاب تاریخ"
+          className="z-[1000] bg-blue-100 rounded-xl shadow-lg ring-1 ring-black ring-opacity-5 p-2"
           style={{
-            position: "absolute",
-            right: 0,
             ...popupStyle,
             transformOrigin: placement === "bottom" ? "top right" : "bottom right",
-            transform: "translateY(0)",
           }}
         >
           {/* Header */}
@@ -352,7 +375,8 @@ export default function JalaliDatePicker({
               امروز
             </button>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );

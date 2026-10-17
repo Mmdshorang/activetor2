@@ -7,7 +7,7 @@ import { customerApi } from '../services/customers';
 import SearchableSelect from '../components/SearchableSelect';
 
 const emptyForm = () => ({ RowID: '0', Mdate: null, Fdate: '', EndDate: null, Id: null, IsActive: null, FEndDate: '' });
-const customerLabel = customer => [customer.RowName, customer.ShopName, customer.MobileNumber, `شناسه: ${customer.RowID}`].filter(Boolean).join(' — ');
+const customerLabel = customer => [customer.RowName, customer.ShopName, customer.MobileNumber].filter(Boolean).join(' — ');
 const toJalali = value => {
   if (!value) return null;
   const date = moment.from(value.slice(0, 10), 'en', 'YYYY-MM-DD');
@@ -25,8 +25,8 @@ export default function Contracts() {
   const [editID, setEditID] = useState(null);
   const [search, setSearch] = useState('');
   const [status, setStatus] = useState('all');
+  const [listCustomerID, setListCustomerID] = useState('');
   const [listLoading, setListLoading] = useState(true);
-  const [detailLoading, setDetailLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [loadError, setLoadError] = useState('');
   const [error, setError] = useState('');
@@ -35,18 +35,19 @@ export default function Contracts() {
   const inFlight = useRef(false);
   const mounted = useRef(false);
   const listController = useRef(null);
-  const detailController = useRef(null);
   const customersController = useRef(null);
-  const busy = saving || detailLoading || listLoading || customersLoading;
+  const busy = saving || listLoading || customersLoading;
   const isEditing = editID !== null;
 
-  const loadContracts = useCallback(async () => {
+  const loadContracts = useCallback(async (customerRowID = '') => {
     listController.current?.abort();
     const controller = new AbortController();
     listController.current = controller;
     setListLoading(true); setLoadError('');
     try {
-      const list = await contractApi.getContracts({ signal: controller.signal });
+      const list = customerRowID
+        ? await contractApi.getContractsByCustomer(customerRowID, { signal: controller.signal })
+        : await contractApi.getContracts({ signal: controller.signal });
       if (mounted.current && !controller.signal.aborted) setContracts(list);
     } catch (err) {
       if (mounted.current && !controller.signal.aborted) setLoadError(err.message || 'دریافت قراردادها انجام نشد.');
@@ -68,7 +69,7 @@ export default function Contracts() {
       if (mounted.current && !controller.signal.aborted) setCustomersLoading(false);
     }
   }, []);
-  const refreshLists = () => { loadContracts(); loadCustomers(); };
+  const refreshLists = () => { loadContracts(listCustomerID); loadCustomers(); };
   useEffect(() => {
     mounted.current = true;
     loadContracts();
@@ -76,7 +77,6 @@ export default function Contracts() {
     return () => {
       mounted.current = false;
       listController.current?.abort();
-      detailController.current?.abort();
       customersController.current?.abort();
     };
   }, [loadContracts, loadCustomers]);
@@ -86,7 +86,7 @@ export default function Contracts() {
     const options = customers.map(customer => ({ value: String(customer.RowID), label: customerLabel(customer) }));
     // Preserve an existing relation even if the customer is no longer in the list.
     if (form.Id && !customersByID.has(String(form.Id))) {
-      options.unshift({ value: String(form.Id), label: `مشتری ثبت‌شده (شناسه: ${form.Id})` });
+      options.unshift({ value: String(form.Id), label: 'مشتری ثبت‌شده' });
     }
     return options;
   }, [customers, customersByID, form.Id]);
@@ -102,24 +102,11 @@ export default function Contracts() {
     setError(''); setSuccess('');
   };
   const reset = () => { setForm(emptyForm()); setEditID(null); setError(''); };
-  const startEdit = async rowID => {
-    if (inFlight.current || busy) return;
-    inFlight.current = true;
-    const controller = new AbortController();
-    detailController.current = controller;
-    setDetailLoading(true); setError(''); setSuccess('');
-    try {
-      const contract = await contractApi.getContractByID(rowID, { signal: controller.signal });
-      if (!mounted.current || controller.signal.aborted) return;
-      setForm(contract); setEditID(contract.RowID);
-      heading.current?.focus();
-      heading.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    } catch (err) {
-      if (mounted.current && !controller.signal.aborted) setError(err.message || 'دریافت قرارداد انجام نشد.');
-    } finally {
-      inFlight.current = false;
-      if (mounted.current) setDetailLoading(false);
-    }
+  const startEdit = contract => {
+    if (busy) return;
+    setForm(contract); setEditID(contract.RowID); setError(''); setSuccess('');
+    heading.current?.focus();
+    heading.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   };
   const save = async event => {
     event.preventDefault();
@@ -133,7 +120,7 @@ export default function Contracts() {
         : await contractApi.insertContract(form);
       if (!mounted.current) return;
       reset(); setSuccess(message);
-      await loadContracts();
+      await loadContracts(listCustomerID);
     } catch (err) {
       if (mounted.current) setError(err.message || 'ذخیره قرارداد انجام نشد.');
     } finally {
@@ -146,7 +133,7 @@ export default function Contracts() {
     return contracts.filter(contract => {
       if (status !== 'all' && String(contract.IsActive) !== status) return false;
       const customer = customersByID.get(String(contract.Id));
-      return [contract.RowID, contract.Id, customer?.RowName, customer?.ShopName, customer?.MobileNumber, contract.Fdate, contract.FEndDate, contract.Mdate, contract.EndDate]
+      return [contract.RowID, contract.Id, contract.Name, contract.ShopName, contract.MobileNumber, customer?.RowName, customer?.ShopName, customer?.MobileNumber, contract.Fdate, contract.FEndDate, contract.Mdate, contract.EndDate]
         .some(value => String(value ?? '').toLocaleLowerCase('fa').includes(term));
     });
   }, [contracts, customersByID, search, status]);
@@ -159,7 +146,7 @@ export default function Contracts() {
       </div>
       {success && <div role="status" className="panel-alert-success">{success}</div>}
       {error && <div role="alert" className="panel-alert-error flex items-center gap-2"><AlertCircle size={18} />{error}</div>}
-      {loadError && <div role="alert" className="panel-alert-error">{loadError}{contracts.length > 0 && <span> اطلاعات نمایش‌داده‌شده مربوط به آخرین دریافت موفق است.</span>}<button type="button" onClick={loadContracts} disabled={busy} className="underline mr-3">تلاش مجدد</button></div>}
+      {loadError && <div role="alert" className="panel-alert-error">{loadError}{contracts.length > 0 && <span> اطلاعات نمایش‌داده‌شده مربوط به آخرین دریافت موفق است.</span>}<button type="button" onClick={() => loadContracts(listCustomerID)} disabled={busy} className="underline mr-3">تلاش مجدد</button></div>}
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-5 items-start">
         <section className="panel-card p-5">
           <h2 ref={heading} tabIndex={-1} className="text-lg font-bold text-slate-900 mb-4 flex items-center gap-2">{isEditing ? <Edit2 size={18} /> : <Plus size={18} />}{isEditing ? 'ویرایش قرارداد' : 'ثبت قرارداد جدید'}</h2>
@@ -189,6 +176,7 @@ export default function Contracts() {
         </section>
         <section className="xl:col-span-2 panel-card overflow-hidden" aria-label="لیست قراردادها">
           <div className="p-4 border-b border-slate-100 space-y-3">
+            <div><label htmlFor="contracts-customer-filter" className="panel-label">جستجوی قرارداد با نام مشتری</label><SearchableSelect inputId="contracts-customer-filter" value={listCustomerID} options={customerOptions} isDisabled={busy} isLoading={customersLoading} placeholder="نام مشتری را جستجو و انتخاب کنید…" noOptionsMessage="مشتری‌ای با این نام پیدا نشد" onChange={value => { const rowID = value || ''; setListCustomerID(rowID); setSearch(''); loadContracts(rowID); }} /></div>
             <div className="flex flex-col sm:flex-row gap-3">
               <div className="relative flex-1"><label htmlFor="contract-search" className="sr-only">جستجوی قراردادها</label><Search className="absolute right-3 top-3 text-slate-400" size={16} /><input id="contract-search" value={search} onChange={event => setSearch(event.target.value)} placeholder="جستجوی مشتری، فروشگاه، موبایل، شناسه یا تاریخ" className="panel-input pr-9" /></div>
               <label className="sm:w-40"><span className="sr-only">فیلتر وضعیت قرارداد</span><select value={status} onChange={event => setStatus(event.target.value)} className="panel-select"><option value="all">همه قراردادها</option><option value="true">فعال</option><option value="false">غیرفعال</option><option value="null">تعیین نشده</option></select></label>
@@ -199,10 +187,10 @@ export default function Contracts() {
             <table className="panel-table"><thead><tr><th>شناسه</th><th>مشتری / فروشگاه</th><th>شروع / پایان</th><th>وضعیت</th><th>عملیات</th></tr></thead><tbody>
               {listLoading && contracts.length === 0 ? <tr><td colSpan={5} className="text-center py-8"><Loader2 className="animate-spin inline-block ml-2" size={18} />در حال بارگذاری…</td></tr> : filtered.length === 0 ? <tr><td colSpan={5} className="text-center py-8 text-slate-500">{loadError ? 'لیست قراردادها دریافت نشد.' : contracts.length ? 'نتیجه‌ای برای این جستجو پیدا نشد.' : 'هنوز قراردادی ثبت نشده است.'}</td></tr> : filtered.map(contract => (
                 <tr key={contract.RowID}>
-                  <td dir="ltr">{contract.RowID}</td><td><p className="font-semibold text-slate-900">{customersByID.get(String(contract.Id))?.RowName || (contract.Id ? `مشتری ${contract.Id}` : '—')}</p><p className="text-xs text-slate-500 mt-1">{customersByID.get(String(contract.Id))?.ShopName || ''}</p></td>
+                  <td dir="ltr">{contract.RowID}</td><td><p className="font-semibold text-slate-900">{contract.Name || customersByID.get(String(contract.Id))?.RowName || 'مشتری نامشخص'}</p><p className="text-xs text-slate-500 mt-1">{contract.ShopName || customersByID.get(String(contract.Id))?.ShopName || ''}</p>{(contract.MobileNumber || customersByID.get(String(contract.Id))?.MobileNumber) && <p className="text-xs text-slate-400 mt-1" dir="ltr">{contract.MobileNumber || customersByID.get(String(contract.Id))?.MobileNumber}</p>}</td>
                   <td className="text-xs"><p>شروع: <span dir="ltr">{contract.Fdate || toJalali(contract.Mdate) || '—'}</span></p><p className="mt-1">پایان: <span dir="ltr">{contract.FEndDate || toJalali(contract.EndDate) || '—'}</span></p></td>
                   <td><span className={`px-2 py-1 rounded-full text-xs whitespace-nowrap ${contract.IsActive === null ? 'bg-slate-100 text-slate-600' : contract.IsActive ? 'bg-emerald-50 text-emerald-700' : 'bg-rose-50 text-rose-700'}`}>{statusLabel(contract.IsActive)}</span></td>
-                  <td><button type="button" onClick={() => startEdit(contract.RowID)} disabled={busy} className="panel-btn-secondary px-3 py-1.5" aria-label={`ویرایش قرارداد ${contract.RowID}`}><Edit2 size={14} />ویرایش</button></td>
+                  <td><button type="button" onClick={() => startEdit(contract)} disabled={busy} className="panel-btn-secondary px-3 py-1.5" aria-label={`ویرایش قرارداد ${contract.RowID}`}><Edit2 size={14} />ویرایش</button></td>
                 </tr>
               ))}
             </tbody></table>

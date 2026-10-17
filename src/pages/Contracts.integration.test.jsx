@@ -26,8 +26,11 @@ test('Contract form creates/edits dates and nullable fields with exact RowID, ha
     const result = { StatusCode: 200, StatusMessage: 'ذخیره شد' };
     if (operation === 'GetCoustomer') return response({ coustomerModels: customers, ResaultClass: result });
     expect(init.headers['Content-Type']).toBe('application/x-www-form-urlencoded;charset=UTF-8');
-    if (operation === 'GetContract') return response({ contractModels: records, ResaultClass: result });
-    if (operation === 'GetContractByID') return response({ contractModels: records.filter(item => item.RowID === data.RowID), ResaultClass: result });
+    if (operation === 'GetAllContract') return response({ contractModels: records, ResaultClass: result });
+    if (operation === 'GetContract') {
+      const selected = customers.find(item => item.RowID === data.RowID);
+      return response({ contractModels: records.filter(item => item.Id === data.RowID).map(item => ({ ...item, Name: selected?.RowName, ShopName: selected?.ShopName, MobileNumber: selected?.MobileNumber })), ResaultClass: result });
+    }
     if (operation === 'InsertContract') records.push({ ...fromWire(data), RowID: '10' });
     if (operation === 'UpdateContract') {
       if (rejectUpdate) return response({ StatusCode: 409, StatusMessage: 'خطای آزمایشی ذخیره' });
@@ -45,7 +48,8 @@ test('Contract form creates/edits dates and nullable fields with exact RowID, ha
   expect(screen.queryByLabelText('شناسه مرتبط (Id)')).not.toBeInTheDocument();
   expect(screen.queryByText('تعداد فاکتور')).not.toBeInTheDocument();
   expect(screen.getByLabelText('تاریخ شروع قرارداد')).toHaveValue('1405/07/23');
-  fireEvent.focus(screen.getByLabelText('تاریخ شروع قرارداد'));
+  fireEvent.click(screen.getAllByRole('button', { name: 'باز کردن تقویم' })[0]);
+  expect((await screen.findByRole('dialog', { name: 'انتخاب تاریخ' })).parentElement).toBe(document.body);
   fireEvent.blur(screen.getByLabelText('تاریخ شروع قرارداد'));
   fireEvent.change(screen.getByLabelText('وضعیت قرارداد'), { target: { value: 'false' } });
   rejectUpdate = true;
@@ -75,17 +79,25 @@ test('Contract form creates/edits dates and nullable fields with exact RowID, ha
   expect(screen.queryByRole('button', { name: `ویرایش قرارداد ${initial.RowID}`, exact: true })).not.toBeInTheDocument();
   expect(screen.getByRole('button', { name: 'ویرایش قرارداد 10', exact: true })).toBeInTheDocument();
   fireEvent.change(screen.getByLabelText('جستجوی قراردادها'), { target: { value: '' } });
+  const contractCallsBeforeEdit = calls.filter(call => ['GetAllContract', 'GetContract'].includes(call.operation)).length;
   await act(async () => { fireEvent.click(screen.getByRole('button', { name: `ویرایش قرارداد ${initial.RowID}`, exact: true })); });
-  expect(calls.filter(call => call.operation === 'GetContractByID').pop().data).toEqual({ RowID: initial.RowID });
+  expect(calls.filter(call => ['GetAllContract', 'GetContract'].includes(call.operation))).toHaveLength(contractCallsBeforeEdit);
   await screen.findByRole('heading', { name: 'ویرایش قرارداد', exact: true });
   await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'انصراف از ویرایش' })); });
   fireEvent.change(screen.getByLabelText('فیلتر وضعیت قرارداد'), { target: { value: 'null' } });
+  expect(screen.getByRole('button', { name: 'ویرایش قرارداد 10', exact: true })).toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: `ویرایش قرارداد ${initial.RowID}`, exact: true })).not.toBeInTheDocument();
+  fireEvent.change(screen.getByLabelText('جستجوی قرارداد با نام مشتری'), { target: { value: 'مشتری دوم' } });
+  fireEvent.keyDown(screen.getByLabelText('جستجوی قرارداد با نام مشتری'), { key: 'ArrowDown', code: 'ArrowDown' });
+  fireEvent.click(await screen.findByText(/مشتری دوم — فروشگاه دوم/));
+  await waitFor(() => expect(calls.filter(call => call.operation === 'GetContract').pop().data).toEqual({ RowID: customers[1].RowID }));
   expect(screen.getByRole('button', { name: 'ویرایش قرارداد 10', exact: true })).toBeInTheDocument();
   expect(screen.queryByRole('button', { name: `ویرایش قرارداد ${initial.RowID}`, exact: true })).not.toBeInTheDocument();
   address = '/mock-contracts-b';
   await loadUserApiConfig.refresh();
   await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'به‌روزرسانی لیست' })); });
   expect(calls.filter(call => call.operation === 'GetContract').pop().url).toBe('/mock-contracts-b/GetContract');
+  expect(calls.filter(call => call.operation === 'GetAllContract').length).toBeGreaterThan(0);
 });
 
 test('An empty customer list cannot submit a contract without a customer', async () => {

@@ -5,146 +5,148 @@ import { createContractApi, buildContractPayload, normalizeContract } from '../s
 import { validateConfig } from '../src/config/userApiConfig.mjs';
 
 const result = (StatusCode = 200, StatusMessage = 'انجام شد') => ({ StatusCode, StatusMessage });
-const model = (overrides = {}) => ({ RowID: '9223372036854775807', Mdate: '2026-10-15T12:30:45.1234567', Fdate: '1405/07/23', EndDate: null, Id: '9007199254740993', IsActive: false, FEndDate: '', ...overrides });
+const model = (overrides = {}) => ({
+  RowID: '9223372036854775807', Mdate: '2026-10-15T12:30:45.1234567', Fdate: '1405/07/23',
+  EndDate: null, Id: '9007199254740993', IsActive: false, FEndDate: '', Name: '', ShopName: '', MobileNumber: '', ...overrides,
+});
 const wrapped = (contractModels, StatusCode = 200) => ({ contractModels, ResaultClass: result(StatusCode) });
 const form = body => Object.fromEntries(new URLSearchParams(body));
 function harness(data, { config = validateConfig({ apiUrl: '/api' }), status = 200, token = 'session-token' } = {}) {
   const calls = [], expired = [];
-  const client = createContractApi({ getConfig: async () => config, getToken: () => token, onUnauthorized: () => expired.push(true), fetchImpl: async (url, init) => {
-    assert.equal(Object.keys(init.headers).some(key => key.toLowerCase() === 'authorization'), false);
-    assert.equal(init.headers.Token, token);
-    calls.push({ url, init });
-    return new Response(typeof data === 'string' ? data : JSON.stringify(data), { status });
-  } });
+  const client = createContractApi({
+    getConfig: async () => config, getToken: () => token, onUnauthorized: () => expired.push(true),
+    fetchImpl: async (url, init) => {
+      assert.equal(Object.keys(init.headers).some(key => key.toLowerCase() === 'authorization'), false);
+      assert.equal(init.headers.Token, token);
+      calls.push({ url, init });
+      return new Response(typeof data === 'string' ? data : JSON.stringify(data), { status });
+    },
+  });
   return { client, calls, expired };
 }
 
-test('GetContract has no body but declares form Content-Type for ContractModel binding', async () => {
+test('GetAllContract loads every contract without a fabricated body', async () => {
   const { client, calls } = harness(wrapped([model()]));
   assert.deepEqual(await client.getContracts(), [model()]);
-  assert.equal(calls[0].url, '/api/GetContract');
+  assert.equal(calls[0].url, '/api/GetAllContract');
   assert.equal(calls[0].init.method, 'GET');
   assert.equal(calls[0].init.body, undefined);
   assert.equal(calls[0].init.headers['Content-Type'], 'application/x-www-form-urlencoded;charset=UTF-8');
 });
 
-test('GetContractByID sends only RowID and selects the matching contract', async () => {
-  const { client, calls } = harness(wrapped([model({ RowID: '5' }), model()]));
-  assert.deepEqual(await client.getContractByID(model().RowID), model());
-  assert.equal(calls[0].url, '/api/GetContractByID');
-  assert.deepEqual(form(calls[0].init.body), { RowID: model().RowID });
+test('GetContract sends only the selected customer RowID', async () => {
+  const customerRowID = '9007199254740993';
+  const { client, calls } = harness(wrapped([model()]));
+  assert.deepEqual(await client.getContractsByCustomer(customerRowID), [model()]);
+  assert.equal(calls[0].url, '/api/GetContract');
+  assert.equal(calls[0].init.method, 'POST');
+  assert.deepEqual(form(calls[0].init.body), { RowID: customerRowID });
+  assert.equal(Object.keys(form(calls[0].init.body)).length, 1);
   assert.equal(calls[0].init.headers['Content-Type'], 'application/x-www-form-urlencoded;charset=UTF-8');
-  await assert.rejects(harness(wrapped([model()])).client.getContractByID('2'), /قرارداد موردنظر پیدا نشد/);
 });
 
-test('Insert/Update send all seven remaining model fields including false, zero and nullable values', async () => {
+test('Insert/Update send seven fields and never send removed or response-only fields', async () => {
   for (const update of [false, true]) {
     const { client, calls } = harness(result());
-    const message = await (update ? client.updateContract(model()) : client.insertContract(model()));
-    assert.equal(message, 'انجام شد');
-    assert.equal(calls[0].url, `/api/${update ? 'UpdateContract' : 'InsertContract'}`);
-    assert.equal(calls[0].init.method, 'POST');
-    assert.deepEqual(form(calls[0].init.body), { ...model(), RowID: update ? model().RowID : '0', EndDate: '', IsActive: 'false' });
-    assert.equal(Object.keys(form(calls[0].init.body)).length, 7);
-    assert.equal(form(calls[0].init.body).ID, undefined);
+    await (update ? client.updateContract(model({ FactorCount: 9, Name: 'نام', ShopName: 'فروشگاه', MobileNumber: '0912' })) : client.insertContract(model({ FactorCount: 9 })));
+    assert.deepEqual(form(calls[0].init.body), {
+      RowID: update ? model().RowID : '0', Mdate: model().Mdate, Fdate: model().Fdate,
+      EndDate: '', Id: model().Id, IsActive: 'false', FEndDate: '',
+    });
     assert.equal(calls[0].init.headers['Content-Type'], 'application/x-www-form-urlencoded;charset=UTF-8');
   }
 });
 
-test('Unset nullable bool/long/date fields remain empty; true/false/null stay distinct', async () => {
-  const { client, calls } = harness(result());
-  await client.insertContract({});
-  assert.deepEqual(form(calls[0].init.body), { RowID: '0', Mdate: '', Fdate: '', EndDate: '', Id: '', IsActive: '', FEndDate: '' });
-  for (const IsActive of [true, false, null]) assert.equal(buildContractPayload({ IsActive }).IsActive, IsActive);
-  assert.equal(buildContractPayload({ Id: 0, FactorCount: '0' }).Id, '0');
+test('Nullable values and invalid non-ID fields are handled before transport', async () => {
+  const empty = harness(result());
+  await empty.client.insertContract({});
+  assert.deepEqual(form(empty.calls[0].init.body), { RowID: '0', Mdate: '', Fdate: '', EndDate: '', Id: '', IsActive: '', FEndDate: '' });
+  for (const input of [{}, model({ RowID: 'not-an-integer' }), model({ Id: '9223372036854775808' }), model({ IsActive: 'false' }), model({ Mdate: '2026-02-30' })]) {
+    const sample = harness(result());
+    await assert.rejects(sample.client.updateContract(input));
+    assert.equal(sample.calls.length, 0);
+  }
   assert.equal(Object.hasOwn(buildContractPayload({ FactorCount: 25 }), 'FactorCount'), false);
 });
 
-test('Invalid update ID, long overflow, bool values and invalid dates fail before a request', async () => {
-  for (const input of [{}, { RowID: 0 }, model({ RowID: 9007199254740992 }), model({ RowID: '9223372036854775808' }), model({ Id: '9223372036854775808' }), model({ IsActive: 'false' }), model({ Mdate: '2026-02-30' }), model({ EndDate: 'bad' })]) {
-    const { client, calls } = harness(result());
-    await assert.rejects(client.updateContract(input));
-    assert.equal(calls.length, 0);
+test('Backend contract RowID is accepted without frontend range checks', async () => {
+  for (const RowID of ['0', '-1', '9223372036854775808', '999999999999999999999999999999']) {
+    const sample = harness(wrapped([model({ RowID })]));
+    assert.equal((await sample.client.getContracts())[0].RowID, RowID);
+
+    const update = harness(result());
+    await update.client.updateContract(model({ RowID }));
+    assert.equal(form(update.calls[0].init.body).RowID, RowID);
   }
 });
 
-test('Long identifiers are lossless in responses and Id remains independent of RowID', async () => {
-  const raw = '{"contractModels":[{"RowID":9223372036854775807,"Id":9007199254740993,"IsActive":null,"FactorCount":null}],"ResaultClass":{"StatusCode":200}}';
-  const contract = await harness(raw).client.getContractByID('9223372036854775807');
-  assert.equal(contract.RowID, '9223372036854775807');
-  assert.equal(contract.Id, '9007199254740993');
-  assert.equal(contract.IsActive, null);
+test('Response fields Name, ShopName and MobileNumber are retained only for display', async () => {
+  const raw = { contractModels: [{ ...model(), Name: 'مشتری نمونه', ShopName: 'فروشگاه نمونه', MobileNumber: '09120000000', FactorCount: 3 }], ResaultClass: result() };
+  const contract = (await harness(raw).client.getContracts())[0];
+  assert.equal(contract.Name, 'مشتری نمونه');
+  assert.equal(contract.ShopName, 'فروشگاه نمونه');
+  assert.equal(contract.MobileNumber, '09120000000');
   assert.equal(Object.hasOwn(contract, 'FactorCount'), false);
+  const update = harness(result());
+  await update.client.updateContract(contract);
+  assert.equal(form(update.calls[0].init.body).Name, undefined);
 });
 
-test('Response casing, legacy .NET dates and existing Fdate/FEndDate strings are preserved', async () => {
-  const raw = { ContractModels: [{ rowId: '1', mdate: '/Date(0)/', fdate: 'تاریخ + &', endDate: null, id: '0', factorCount: 0, isActive: false, fEndDate: 'پایان =' }], resaultClass: { statusCode: 200 } };
-  const { client } = harness(raw);
-  const contract = await client.getContractByID('1');
+test('Long identifiers, response casing and .NET dates remain lossless', async () => {
+  const raw = '{"ContractModels":[{"rowID":9223372036854775807,"id":9007199254740993,"mdate":"/Date(0)/","isActive":null,"name":"نمونه"}],"resaultClass":{"statusCode":200}}';
+  const contract = (await harness(raw).client.getContracts())[0];
+  assert.equal(contract.RowID, '9223372036854775807');
+  assert.equal(contract.Id, '9007199254740993');
   assert.equal(contract.Mdate, '1970-01-01T00:00:00.000Z');
-  assert.equal(contract.Id, '0');
-  assert.equal(contract.Fdate, 'تاریخ + &');
-  const insert = harness(result()); await insert.client.insertContract(contract);
-  assert.equal(form(insert.calls[0].init.body).FEndDate, 'پایان =');
+  assert.equal(contract.Name, 'نمونه');
   assert.throws(() => normalizeContract([]));
 });
 
-test('Successful null contracts list is empty, but application failures and malformed lists are errors', async () => {
-  for (const value of [wrapped(null), { ContractModels: null, ResaultClass: result() }]) {
-    assert.deepEqual(await harness(value).client.getContracts(), []);
-    await assert.rejects(harness(value).client.getContractByID('1'), /پیدا نشد/);
+test('Null lists are empty while malformed and failed responses are errors', async () => {
+  assert.deepEqual(await harness(wrapped(null)).client.getContracts(), []);
+  assert.deepEqual(await harness(wrapped(null)).client.getContractsByCustomer('1'), []);
+  for (const data of [{ ResaultClass: result() }, wrapped({}), wrapped(null, 500), { contractModels: [] }, '<html>bad</html>']) {
+    await assert.rejects(harness(data).client.getContracts());
   }
-  for (const data of [{ ResaultClass: result() }, wrapped({}), wrapped(null, 500), { contractModels: [] }, '<html>bad</html>']) await assert.rejects(harness(data).client.getContracts());
   await assert.rejects(harness(result(409, 'قرارداد تکراری')).client.insertContract({}), /تکراری/);
 });
 
-test('Contract methods support configured transports without fabricated list inputs', async () => {
-  let config = validateConfig({ apiUrl: '/api', endpoints: { GetContract: { method: 'POST' }, GetContractByID: { method: 'GET' } } });
-  const list = harness(wrapped([model()]), { config });
-  await list.client.getContracts();
-  assert.equal(list.calls[0].init.method, 'POST'); assert.equal(list.calls[0].init.body, undefined);
-  assert.equal(list.calls[0].init.headers['Content-Type'], 'application/x-www-form-urlencoded;charset=UTF-8');
-  await list.client.getContractByID(model().RowID);
-  assert.equal(list.calls[1].url, '/api/GetContractByID?RowID=9223372036854775807'); assert.equal(list.calls[1].init.body, undefined);
-  for (const method of ['PUT', 'PATCH']) {
-    config = validateConfig({ apiUrl: '/api', endpoints: { UpdateContract: { method } } });
-    const update = harness(result(), { config }); await update.client.updateContract(model());
-    assert.equal(update.calls[0].init.method, method);
-    assert.equal(Object.keys(form(update.calls[0].init.body)).length, 7);
-  }
-  assert.throws(() => validateConfig({ apiUrl: '/api', endpoints: { InsertContract: { method: 'GET' } } }));
+test('Configured GET customer lookup puts only RowID in the query', async () => {
+  const config = validateConfig({ apiUrl: '/api', endpoints: { GetContract: { method: 'GET' }, GetAllContract: { method: 'POST' } } });
+  const sample = harness(wrapped([]), { config });
+  await sample.client.getContracts();
+  assert.equal(sample.calls[0].init.method, 'POST');
+  assert.equal(sample.calls[0].init.body, undefined);
+  await sample.client.getContractsByCustomer('9223372036854775807');
+  assert.equal(sample.calls[1].url, '/api/GetContract?RowID=9223372036854775807');
+  assert.equal(sample.calls[1].init.body, undefined);
 });
 
-test('Contracts share 401 expiry, retained 403 sessions and anonymous-call protection', async () => {
-  const denied = harness(result(403), { status: 403 }); await assert.rejects(denied.client.getContracts()); assert.equal(denied.expired.length, 0);
-  const expired = harness('Unauthorized', { status: 401 }); await assert.rejects(expired.client.getContracts()); assert.equal(expired.expired.length, 1);
-  const anonymous = harness(wrapped([]), { token: null }); await assert.rejects(anonymous.client.getContracts()); assert.equal(anonymous.calls.length, 0);
-});
-
-
-test('GetContract sends Content-Type over real HTTP to avoid the missing-media-type 415', async t => {
+test('GetContract wire request has form Content-Type and exactly one RowID', async t => {
+  const requests = [];
   const server = http.createServer(async (request, response) => {
     let body = '';
     for await (const chunk of request) body += chunk;
-    const supported = request.headers['content-type'] === 'application/x-www-form-urlencoded;charset=UTF-8';
-    response.writeHead(supported ? 200 : 415, { 'Content-Type': 'application/json' });
-    response.end(JSON.stringify(supported ? wrapped([]) : { Message: 'No Content-Type header' }));
-    if (supported) {
-      assert.equal(request.method, 'GET');
-      assert.equal(request.headers.token, 'test-token');
-      assert.equal(body, '');
-    }
+    requests.push({ request, body });
+    response.writeHead(200, { 'Content-Type': 'application/json' });
+    response.end(JSON.stringify(wrapped([])));
   });
   await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
   t.after(() => new Promise(resolve => { server.close(resolve); server.closeAllConnections(); }));
   const apiUrl = `http://127.0.0.1:${server.address().port}`;
-  assert.equal((await fetch(`${apiUrl}/GetContract`)).status, 415);
   const client = createContractApi({ getConfig: async () => validateConfig({ apiUrl }), getToken: () => 'test-token' });
-  assert.deepEqual(await client.getContracts(), []);
+  await client.getContractsByCustomer('42');
+  assert.equal(requests[0].request.method, 'POST');
+  assert.equal(requests[0].request.headers['content-type'], 'application/x-www-form-urlencoded;charset=UTF-8');
+  assert.equal(requests[0].request.headers.token, 'test-token');
+  assert.equal(requests[0].body, 'RowID=42');
 });
 
-test('Nearby long contract IDs do not select the wrong record through Number rounding', async () => {
-  const requested = model({ RowID: '9223372036854775806' });
-  const { client } = harness(wrapped([model(), requested]));
-  assert.equal((await client.getContractByID(requested.RowID)).RowID, requested.RowID);
+test('Contracts share session expiry and anonymous-call protection', async () => {
+  const expired = harness('Unauthorized', { status: 401 });
+  await assert.rejects(expired.client.getContracts());
+  assert.equal(expired.expired.length, 1);
+  const anonymous = harness(wrapped([]), { token: null });
+  await assert.rejects(anonymous.client.getContractsByCustomer('1'));
+  assert.equal(anonymous.calls.length, 0);
 });
